@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -301,7 +302,13 @@ func getDB(ctx context.Context) (*pgxpool.Pool, error) {
 			dbErr = errors.New("DATABASE_URL environment variable is required")
 			return
 		}
-		dbPool, dbErr = pgxpool.New(ctx, dbURL)
+		cfg, err := pgxpool.ParseConfig(dbURL)
+		if err != nil {
+			dbErr = err
+			return
+		}
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+		dbPool, dbErr = pgxpool.NewWithConfig(ctx, cfg)
 	})
 	if dbErr != nil {
 		return nil, dbErr
