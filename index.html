@@ -19,25 +19,27 @@
 
       <p class="subtitle">Sort and filter problems by frequency, company, and difficulty.</p>
 
-      <div class="filters" x-show="!error">
-        <select class="select" x-model="sortBy" @change="resetAndLoad()">
+      <section class="filters" x-show="!error" aria-label="Problem filters">
+        <label class="sr-only" for="sort-by">Sort problems</label>
+        <select id="sort-by" class="select" x-model="sortBy" @change="resetAndLoad()">
           <option value="frequency">Sort: Frequency</option>
           <option value="difficulty">Sort: Difficulty</option>
         </select>
 
-        <select class="select" x-show="sortBy === 'difficulty'" x-model="difficultySortDir" @change="resetAndLoad()">
+        <label class="sr-only" for="difficulty-direction" x-show="sortBy === 'difficulty'">Difficulty direction</label>
+        <select id="difficulty-direction" class="select" x-show="sortBy === 'difficulty'" x-model="difficultySortDir" @change="resetAndLoad()">
           <option value="asc">Difficulty: Ascending (Easy → Hard)</option>
           <option value="desc">Difficulty: Descending (Hard → Easy)</option>
         </select>
 
-        <button class="select modal-trigger" type="button" @click="companyModalOpen = true">
+        <button class="select modal-trigger" type="button" @click="openCompanyModal()" aria-label="Open company selector">
           Select companies
         </button>
 
-        <button class="select modal-trigger" type="button" x-show="selectedCompanyIds.length" @click="clearCompanies()">
+        <button class="select modal-trigger" type="button" x-show="selectedCompanyIds.length" @click="clearCompanies()" aria-label="Clear selected companies">
           Clear companies
         </button>
-      </div>
+      </section>
 
       <div class="selected-companies" x-show="selectedCompanies.length">
         <template x-for="company in selectedCompanies" :key="company.id">
@@ -87,14 +89,15 @@
       <p class="panel-state error" x-show="error" x-text="error"></p>
       <div x-ref="sentinel" style="height: 1px;"></div>
 
-      <div class="modal-overlay" x-show="companyModalOpen" x-cloak @click.self="companyModalOpen = false">
-        <div class="modal-card">
+      <div class="modal-overlay" x-show="companyModalOpen" x-cloak @click.self="closeCompanyModal()" @keydown.escape.window="closeCompanyModal()">
+        <div class="modal-card" x-ref="companyModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="company-modal-title" @keydown.tab="trapModalFocus($event)">
           <div class="modal-head">
-            <h3>Select companies</h3>
-            <button class="modal-close" @click="companyModalOpen = false">✕</button>
+            <h3 id="company-modal-title">Select companies</h3>
+            <button class="modal-close" type="button" aria-label="Close company selector" @click="closeCompanyModal()">✕</button>
           </div>
 
-          <input class="search" type="text" x-model="companySearch" placeholder="Search companies..." />
+          <label class="sr-only" for="company-search">Search companies</label>
+          <input id="company-search" x-ref="companySearchInput" class="search" type="text" x-model="companySearch" placeholder="Search companies..." />
 
           <div class="modal-grid">
             <template x-for="company in filteredCompanies" :key="company.id">
@@ -122,6 +125,7 @@
           selectedCompanyIds: [],
           companySearch: '',
           companyModalOpen: false,
+          lastFocusedElement: null,
           total: 0,
           offset: 0,
           limit: 60,
@@ -172,6 +176,46 @@
             this.selectedCompanyIds = [];
             await this.resetAndLoad();
           },
+          openCompanyModal() {
+            this.lastFocusedElement = document.activeElement;
+            this.companyModalOpen = true;
+            this.$nextTick(() => {
+              this.$refs.companySearchInput?.focus();
+            });
+          },
+          closeCompanyModal() {
+            this.companyModalOpen = false;
+            this.$nextTick(() => {
+              this.lastFocusedElement?.focus?.();
+            });
+          },
+          trapModalFocus(event) {
+            if (!this.companyModalOpen) return;
+            const root = this.$refs.companyModal;
+            if (!root) return;
+
+            const focusable = [...root.querySelectorAll(
+              'a[href], area[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )];
+
+            if (!focusable.length) {
+              event.preventDefault();
+              root.focus();
+              return;
+            }
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = document.activeElement;
+
+            if (event.shiftKey && active === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && active === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          },
 
           buildProblemsUrl() {
             const params = new URLSearchParams({
@@ -205,12 +249,16 @@
             this.loadingMore = true;
             this.error = '';
             try {
-              const res = await this.App.fetchJson(this.buildProblemsUrl(), { cache: false });
+              const res = await this.App.fetchJson(this.buildProblemsUrl());
               const items = res.items || [];
               this.total = Number(res.total || 0);
               this.problems = [...this.problems, ...items];
               this.offset += items.length;
-              this.hasMore = this.offset < this.total && items.length > 0;
+              if (typeof res.has_more === 'boolean') {
+                this.hasMore = res.has_more;
+              } else {
+                this.hasMore = this.offset < this.total && items.length > 0;
+              }
             } catch (e) {
               this.error = e.message || 'Failed to load problems';
             } finally {

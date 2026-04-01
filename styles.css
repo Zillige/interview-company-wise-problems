@@ -1,5 +1,229 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 
+/*! modern-normalize v3.0.1 | MIT License | https://github.com/sindresorhus/modern-normalize */
+
+/*
+Document
+========
+*/
+
+/**
+Use a better box model (opinionated).
+*/
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+/**
+1. Improve consistency of default fonts in all browsers. (https://github.com/sindresorhus/modern-normalize/issues/3)
+2. Correct the line height in all browsers.
+3. Prevent adjustments of font size after orientation changes in iOS.
+4. Use a more readable tab size (opinionated).
+*/
+
+html {
+  font-family:
+    system-ui,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif,
+    'Apple Color Emoji',
+    'Segoe UI Emoji'; /* 1 */
+  line-height: 1.15; /* 2 */
+  -webkit-text-size-adjust: 100%; /* 3 */
+  tab-size: 4; /* 4 */
+}
+
+/*
+Sections
+========
+*/
+
+/**
+Remove the margin in all browsers.
+*/
+
+body {
+  margin: 0;
+}
+
+/*
+Text-level semantics
+====================
+*/
+
+/**
+Add the correct font weight in Chrome and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/**
+1. Improve consistency of default fonts in all browsers. (https://github.com/sindresorhus/modern-normalize/issues/3)
+2. Correct the odd 'em' font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    'Liberation Mono',
+    Menlo,
+    monospace; /* 1 */
+  font-size: 1em; /* 2 */
+}
+
+/**
+Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/**
+Prevent 'sub' and 'sup' elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+Tabular data
+============
+*/
+
+/**
+Correct table border color inheritance in Chrome and Safari. (https://issues.chromium.org/issues/40615503, https://bugs.webkit.org/show_bug.cgi?id=195016)
+*/
+
+table {
+  border-color: currentcolor;
+}
+
+/*
+Forms
+=====
+*/
+
+/**
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+*/
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit; /* 1 */
+  font-size: 100%; /* 1 */
+  line-height: 1.15; /* 1 */
+  margin: 0; /* 2 */
+}
+
+/**
+Correct the inability to style clickable types in iOS and Safari.
+*/
+
+button,
+[type='button'],
+[type='reset'],
+[type='submit'] {
+  -webkit-appearance: button;
+}
+
+/**
+Remove the padding so developers are not caught out when they zero out 'fieldset' elements in all browsers.
+*/
+
+legend {
+  padding: 0;
+}
+
+/**
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/**
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/**
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[type='search'] {
+  -webkit-appearance: textfield; /* 1 */
+  outline-offset: -2px; /* 2 */
+}
+
+/**
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/**
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to 'inherit' in Safari.
+*/
+
+::-webkit-file-upload-button {
+  -webkit-appearance: button; /* 1 */
+  font: inherit; /* 2 */
+}
+
+/*
+Interactive
+===========
+*/
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DESIGN TOKENS — single source of truth for every value
    ═══════════════════════════════════════════════════════════════ */
@@ -164,7 +388,7 @@ body {
 .header h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--text-2xl);
+  font-size: clamp(1.4rem, 5vw, var(--text-2xl));
   font-weight: var(--weight-regular);
   letter-spacing: var(--tracking-tight);
   color: var(--color-text-primary);
@@ -184,19 +408,26 @@ body {
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
   margin-bottom: var(--space-5);
   animation: fadeSlideDown var(--duration-slow) var(--ease-out) calc(var(--duration-fast) * 3) both;
+}
+
+.filters > * {
+  min-width: 0;
 }
 
 .search, .select {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   color: var(--color-text-primary);
   font-family: var(--font-body);
   font-size: var(--text-base);
+  width: auto;
+  min-height: 40px;
   outline: none;
   box-shadow: var(--shadow-inset);
   transition:
@@ -205,8 +436,22 @@ body {
     background   var(--duration-base) var(--ease-out);
 }
 
+.filters .search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.filters .select {
+  flex: 0 0 auto;
+}
+
+.filters .toggle-inline {
+  min-height: 40px;
+}
+
 .modal-trigger {
   cursor: pointer;
+  min-height: 40px;
 }
 
 .page-link {
@@ -243,6 +488,7 @@ body {
   color: var(--color-text-primary);
   border-radius: var(--radius-full);
   padding: 4px var(--space-3);
+  min-height: 44px;
   cursor: pointer;
 }
 
@@ -278,6 +524,8 @@ body {
   background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--text-lg);
+  min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
 }
 
@@ -307,6 +555,18 @@ body {
 
 [x-cloak] { display: none !important; }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .search::placeholder { color: var(--color-text-muted); }
 
 .search:hover:not(:focus), .select:hover:not(:focus) {
@@ -319,7 +579,7 @@ body {
   box-shadow: 0 0 0 3px var(--color-pink-glow), var(--shadow-inset);
 }
 
-.search { min-width: 280px; }
+.search { min-width: 0; }
 
 /* Fallback (all browsers): custom non-native select look */
 .select {
@@ -376,7 +636,7 @@ body {
 .cards {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -596,9 +856,64 @@ body {
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 700px) {
-  .header { flex-direction: column; align-items: flex-start; }
-  .search { min-width: 100%; }
-  .container { padding: var(--space-5) var(--space-4); }
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions,
+  .filters {
+    width: 100%;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters .search,
+  .filters .select,
+  .filters .toggle-inline {
+    width: 100%;
+    max-width: none;
+  }
+
+  .card {
+    padding: var(--space-3);
+  }
+
+  .meta {
+    flex-direction: column;
+    gap: var(--space-1);
+    align-items: flex-start;
+  }
+
+  .modal-card {
+    max-height: 90vh;
+    padding: var(--space-3);
+  }
+
+  .modal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .container {
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

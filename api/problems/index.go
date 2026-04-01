@@ -27,8 +27,9 @@ type problemSummary struct {
 }
 
 type problemsResponse struct {
-	Items []problemSummary `json:"items"`
-	Total int              `json:"total"`
+	Items   []problemSummary `json:"items"`
+	Total   int              `json:"total"`
+	HasMore bool             `json:"has_more"`
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -96,13 +97,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	whereSQL := strings.Join(whereClauses, " AND ")
 
-	var total int
-	err = pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM problems p WHERE "+whereSQL, countArgs...).Scan(&total)
-	if err != nil {
-		http.Error(w, "failed to count problems: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	queryArgs := append([]any{}, countArgs...)
 	matchedExpr := "0::float8"
 	if len(companyIDs) > 0 {
@@ -128,7 +122,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	queryArgs = append(queryArgs, limit, offset)
+	effectiveLimit := limit + 1
+	queryArgs = append(queryArgs, effectiveLimit, offset)
 	limitPos := len(queryArgs) - 1
 	offsetPos := len(queryArgs)
 
@@ -155,7 +150,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	items := make([]problemSummary, 0, limit)
+	items := make([]problemSummary, 0, effectiveLimit)
 	for rows.Next() {
 		var p problemSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Difficulty, &p.AcceptanceRate, &p.Link, &p.TotalFrequency, &p.MatchedFrequency); err != nil {
@@ -169,7 +164,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(problemsResponse{Items: items, Total: total})
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	total := offset + len(items)
+	if hasMore {
+		total++
+	}
+
+	_ = json.NewEncoder(w).Encode(problemsResponse{Items: items, Total: total, HasMore: hasMore})
 }
 
 func parseDifficultyList(raw string) ([]string, error) {
