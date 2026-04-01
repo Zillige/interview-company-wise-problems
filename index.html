@@ -22,6 +22,11 @@
           <option value="difficulty">Sort: Difficulty</option>
         </select>
 
+        <select class="select" x-show="sortBy === 'difficulty'" x-model="difficultySortDir" @change="resetAndLoad()">
+          <option value="asc">Difficulty: Ascending (Easy → Hard)</option>
+          <option value="desc">Difficulty: Descending (Hard → Easy)</option>
+        </select>
+
         <button class="select modal-trigger" type="button" @click="companyModalOpen = true">
           Select companies
         </button>
@@ -108,6 +113,7 @@
           loadingMore: false,
           error: '',
           sortBy: 'frequency',
+          difficultySortDir: 'asc',
           problems: [],
           companies: [],
           selectedCompanyIds: [],
@@ -170,6 +176,9 @@
               offset: String(this.offset),
               sort: this.sortBy,
             });
+            if (this.sortBy === 'difficulty') {
+              params.set('sort_dir', this.difficultySortDir);
+            }
             if (this.selectedCompanyIds.length) {
               params.set('company_ids', this.selectedCompanyIds.join(','));
             }

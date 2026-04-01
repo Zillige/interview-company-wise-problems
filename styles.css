@@ -345,7 +345,55 @@ body {
 }
 
 .search { min-width: 280px; }
+
+/* Fallback (all browsers): custom non-native select look */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
 .select option { background: var(--color-surface-2); }
+
+/* Progressive enhancement (Chrome/Chromium): customizable picker */
+@supports (appearance: base-select) {
+  .select {
+    appearance: base-select;
+    -webkit-appearance: base-select;
+    background-image: none;
+    padding-right: var(--space-4);
+  }
+
+  .select::picker-icon {
+    color: var(--color-text-secondary);
+    transition: transform var(--duration-base) var(--ease-out);
+  }
+
+  .select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  .select::picker(select) {
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .select option {
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-primary);
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════
    CARDS GRID

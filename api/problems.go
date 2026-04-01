@@ -61,6 +61,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	sortDir, err := parseSortDirection(r.URL.Query().Get("sort_dir"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	limit := parseLimit(r.URL.Query().Get("limit"), 60, 200)
 	offset := parseOffset(r.URL.Query().Get("offset"), 0)
@@ -111,7 +116,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	orderBy := "total_frequency DESC, p.title ASC"
 	switch sortBy {
 	case "difficulty":
-		orderBy = "CASE p.difficulty WHEN 'Easy' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Hard' THEN 3 ELSE 4 END ASC, total_frequency DESC, p.title ASC"
+		if sortDir == "desc" {
+			orderBy = "CASE p.difficulty WHEN 'Easy' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Hard' THEN 3 ELSE 4 END DESC, total_frequency DESC, p.title ASC"
+		} else {
+			orderBy = "CASE p.difficulty WHEN 'Easy' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Hard' THEN 3 ELSE 4 END ASC, total_frequency DESC, p.title ASC"
+		}
 	case "company":
 		if len(companyIDs) > 0 {
 			orderBy = "matched_frequency DESC, total_frequency DESC, p.title ASC"
@@ -238,6 +247,17 @@ func parseSort(raw string) (string, error) {
 		return "company", nil
 	default:
 		return "", fmt.Errorf("invalid sort: %q", raw)
+	}
+}
+
+func parseSortDirection(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "asc":
+		return "asc", nil
+	case "desc":
+		return "desc", nil
+	default:
+		return "", fmt.Errorf("invalid sort_dir: %q", raw)
 	}
 }
 
