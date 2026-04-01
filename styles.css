@@ -5,39 +5,39 @@
    ═══════════════════════════════════════════════════════════════ */
 :root {
 
-  /* — Palette — */
-  --color-bg:           #0a0810;
-  --color-surface-0:    #100c1a;
-  --color-surface-1:    #17112a;
-  --color-surface-2:    #201840;
-  --color-surface-3:    #2e2255;
+  /* — Palette (mapped from your provided dark theme values) — */
+  --color-bg:           oklch(0.1776 0 0);
+  --color-surface-0:    oklch(0.1776 0 0);
+  --color-surface-1:    oklch(0.2134 0 0);
+  --color-surface-2:    oklch(0.2520 0 0);
+  --color-surface-3:    oklch(0.2850 0 0);
 
-  --color-border-subtle:  #2a1d42;
-  --color-border:         #3d2860;
-  --color-border-strong:  #6b3fa0;
+  --color-border-subtle:  oklch(0.2351 0.0115 91.7467);
+  --color-border:         oklch(0.3163 0.0190 63.6992);
+  --color-border-strong:  oklch(0.4017 0 0);
 
-  --color-pink-400:   #f472b6;
-  --color-pink-500:   #ec4899;
-  --color-pink-600:   #db2777;
-  --color-pink-glow:  #f472b638;
-  --color-pink-faint: #f472b610;
+  --color-pink-400:   oklch(0.9247 0.0524 66.1732);
+  --color-pink-500:   oklch(0.9245 0.0533 67.0855);
+  --color-pink-600:   oklch(0.8711 0.0055 286.2860);
+  --color-pink-glow:  oklch(0.9247 0.0524 66.1732 / 0.28);
+  --color-pink-faint: oklch(0.9247 0.0524 66.1732 / 0.10);
 
-  --color-lilac:      #c084fc;
-  --color-rose:       #fb7185;
+  --color-lilac:      oklch(0.4882 0.2172 264.3763);
+  --color-rose:       oklch(0.6271 0.1936 33.3390);
 
-  --color-text-primary:   #fce7f3;
-  --color-text-secondary: #a78bbf;
-  --color-text-muted:     #6b4f88;
+  --color-text-primary:   oklch(0.9491 0 0);
+  --color-text-secondary: oklch(0.7699 0 0);
+  --color-text-muted:     oklch(0.65 0 0);
 
-  --color-success:        #4ade80;
-  --color-warning:        #fb923c;
-  --color-danger:         #f87171;
-  --color-success-bg:     #052e1640;
-  --color-warning-bg:     #43200540;
-  --color-danger-bg:      #3f070740;
-  --color-success-border: #16a34a50;
-  --color-warning-border: #ea580c50;
-  --color-danger-border:  #dc262650;
+  --color-success:        oklch(0.7674 0.1533 147.53);
+  --color-warning:        oklch(0.7500 0.14 70);
+  --color-danger:         oklch(0.6271 0.1936 33.3390);
+  --color-success-bg:     oklch(0.7674 0.1533 147.53 / 0.18);
+  --color-warning-bg:     oklch(0.7500 0.14 70 / 0.18);
+  --color-danger-bg:      oklch(0.6271 0.1936 33.3390 / 0.18);
+  --color-success-border: oklch(0.7674 0.1533 147.53 / 0.35);
+  --color-warning-border: oklch(0.7500 0.14 70 / 0.35);
+  --color-danger-border:  oklch(0.6271 0.1936 33.3390 / 0.35);
 
   /* — Radius — */
   --radius-xs:   6px;
@@ -161,11 +161,7 @@ body {
   font-size: var(--text-2xl);
   font-weight: var(--weight-regular);
   letter-spacing: var(--tracking-tight);
-  background: linear-gradient(135deg, var(--color-pink-400) 0%, var(--color-lilac) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 20px var(--color-pink-glow));
+  color: var(--color-text-primary);
 }
 
 .subtitle {
@@ -208,21 +204,15 @@ body {
 }
 
 .nav a::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, var(--color-pink-faint), transparent);
-  opacity: 0;
-  transition: opacity var(--duration-base);
+  content: none;
 }
 
 .nav a:hover {
   color: var(--color-pink-400);
   border-color: var(--color-pink-600);
-  box-shadow: var(--shadow-glow-sm), var(--shadow-btn);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-btn);
+  transform: translateY(-1px);
 }
-.nav a:hover::after { opacity: 1; }
 .nav a:active { transform: translateY(0) scale(0.97); }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -302,44 +292,17 @@ body {
 .card:nth-child(5)  { animation-delay: 200ms; }
 .card:nth-child(n+6){ animation-delay: 250ms; }
 
-.card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, var(--color-pink-faint) 0%, transparent 65%);
-  pointer-events: none;
-  opacity: 0.6;
-  transition: opacity var(--duration-base);
-}
-
-/* shine sweep on hover */
+.card::before,
 .card::after {
-  content: '';
-  position: absolute;
-  top: -60%;
-  left: -80%;
-  width: 50%;
-  height: 220%;
-  background: linear-gradient(
-    105deg,
-    transparent 40%,
-    rgba(244,114,182,0.08) 50%,
-    transparent 60%
-  );
-  transform: skewX(-15deg);
-  transition: left var(--duration-slower) var(--ease-out), opacity var(--duration-base);
-  opacity: 0;
-  pointer-events: none;
+  content: none;
 }
 
 .card:hover {
-  transform: translateY(-3px) scale(1.005);
+  transform: translateY(-2px);
   border-color: var(--color-border);
-  box-shadow: var(--shadow-lg), var(--shadow-glow-sm);
+  box-shadow: var(--shadow-lg);
 }
-.card:hover::before { opacity: 1; }
-.card:hover::after  { left: 130%; opacity: 1; }
-.card:active { transform: translateY(-1px) scale(1.002); }
+.card:active { transform: translateY(0); }
 
 .card-header {
   display: flex;
@@ -387,8 +350,8 @@ body {
     box-shadow var(--duration-base) var(--ease-out);
 }
 .logo:hover {
-  transform: scale(1.2) rotate(-3deg);
-  box-shadow: var(--shadow-glow-sm);
+  transform: scale(1.08);
+  box-shadow: var(--shadow-sm);
 }
 .logo.large {
   width: 40px;
@@ -498,9 +461,9 @@ body {
   padding-left: var(--space-5);
 }
 .company-row.active {
-  background: linear-gradient(90deg, #f472b618, transparent);
+  background: var(--color-pink-faint);
   border-left: 2px solid var(--color-pink-400);
-  box-shadow: var(--shadow-glow-sm);
+  box-shadow: none;
 }
 
 .company-name {
@@ -571,8 +534,8 @@ body {
 .mini-list li:hover {
   border-color: var(--color-pink-600);
   background: var(--color-surface-3);
-  transform: translateX(4px);
-  box-shadow: var(--shadow-glow-sm);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-sm);
 }
 .mini-list a {
   color: var(--color-text-primary);
@@ -637,14 +600,8 @@ body {
 .skeleton-card { overflow: hidden; }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-surface-2) 25%,
-    var(--color-border-subtle) 37%,
-    var(--color-surface-2) 63%
-  );
-  background-size: 400% 100%;
-  animation: shimmer 1.4s var(--ease-in-out) infinite;
+  background: var(--color-surface-2);
+  animation: none;
   border-radius: var(--radius-xs);
 }
 .skeleton.line { height: 11px; margin: var(--space-3) 0; }
@@ -655,11 +612,6 @@ body {
 /* ═══════════════════════════════════════════════════════════════
    KEYFRAMES
    ═══════════════════════════════════════════════════════════════ */
-@keyframes shimmer {
-  0%   { background-position: 100% 0; }
-  100% { background-position: 0 0; }
-}
-
 @keyframes fadeSlideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to   { opacity: 1; transform: translateY(0); }
