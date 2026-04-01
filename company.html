@@ -15,7 +15,6 @@
         <nav class="nav">
           <a href="/">Home</a>
           <a href="/companies">Companies</a>
-          <a href="/problems">Problems</a>
         </nav>
       </header>
 
@@ -31,6 +30,7 @@
           <div>
             <h2 x-text="company.name"></h2>
             <p x-text="`${company.problem_count} problems · total frequency ${App.formatNum(company.total_frequency)}`"></p>
+            <p class="progress-text" x-text="completionText()"></p>
           </div>
         </div>
       </section>
@@ -43,6 +43,12 @@
           <option value="Medium">Medium</option>
           <option value="Hard">Hard</option>
         </select>
+        <select class="select" x-model="statusFilter">
+          <option value="">All statuses</option>
+          <template x-for="status in App.statuses" :key="`company-filter-${status}`">
+            <option :value="status" x-text="status"></option>
+          </template>
+        </select>
       </div>
 
       <section class="grid cards" x-show="!loading && !error && company">
@@ -53,8 +59,12 @@
               <span class="badge" :class="App.difficultyClass(problem.difficulty)" x-text="problem.difficulty"></span>
             </div>
             <div class="meta">
-              <span x-text="`Acceptance: ${App.formatPct(problem.acceptance_rate)}`"></span>
               <span x-text="`Frequency: ${App.formatNum(problem.frequency)}`"></span>
+            </div>
+            <div class="problem-actions">
+              <label class="solved-check">
+                <input type="checkbox" :checked="isSolved(problem.id)" @change="toggleSolved(problem.id, $event.target.checked)" /> Solved
+              </label>
             </div>
           </article>
         </template>
@@ -72,6 +82,8 @@
           company: null,
           query: '',
           difficulty: '',
+          statusFilter: '',
+          progressVersion: 0,
           init() {
             this.load();
           },
@@ -106,13 +118,29 @@
           },
           filteredProblems() {
             if (!this.company) return [];
+            this.progressVersion;
             const q = this.query.trim().toLowerCase();
             return this.company.problems.filter(p => {
               const matchQuery = !q || p.title.toLowerCase().includes(q);
               const matchDifficulty = !this.difficulty || p.difficulty === this.difficulty;
-              return matchQuery && matchDifficulty;
+              const matchStatus = !this.statusFilter || this.App.getProblemStatus(p.id) === this.statusFilter;
+              return matchQuery && matchDifficulty && matchStatus;
             });
-          }
+          },
+          isSolved(problemId) {
+            this.progressVersion;
+            return this.App.getProblemStatus(problemId) === 'Solved';
+          },
+          toggleSolved(problemId, checked) {
+            this.App.setProblemStatus(problemId, checked ? 'Solved' : 'Not solved');
+            this.progressVersion++;
+          },
+          completionText() {
+            if (!this.company) return '';
+            this.progressVersion;
+            const stats = this.App.computeSolvedStats(this.company.problems || []);
+            return `Solved: ${stats.solved}/${stats.total} (${this.App.formatPct(stats.pct)})`;
+          },
         }
       }
     </script>

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,12 +16,13 @@ import (
 )
 
 type problemSummary struct {
-	ID             int     `json:"id"`
-	Title          string  `json:"title"`
-	Difficulty     string  `json:"difficulty"`
-	AcceptanceRate float64 `json:"acceptance_rate"`
-	Link           string  `json:"link"`
-	TotalFrequency float64 `json:"total_frequency"`
+	ID               int     `json:"id"`
+	Title            string  `json:"title"`
+	Difficulty       string  `json:"difficulty"`
+	AcceptanceRate   float64 `json:"acceptance_rate"`
+	Link             string  `json:"link"`
+	TotalFrequency   float64 `json:"total_frequency"`
+	MatchedFrequency float64 `json:"matched_frequency,omitempty"`
 }
 
 type problemsResponse struct {
@@ -44,12 +46,81 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	difficulty, err := parseDifficulty(r.URL.Query().Get("difficulty"))
+	difficulties, err := parseDifficultyList(r.URL.Query().Get("difficulty"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	limit := parseLimit(r.URL.Query().Get("limit"), 3000, 5000)
+	companyIDs, err := parseCompanyIDs(r.URL.Query().Get("company_ids"), r.URL.Query().Get("companies"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	sortBy, err := parseSort(r.URL.Query().Get("sort"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	limit := parseLimit(r.URL.Query().Get("limit"), 60, 200)
+	offset := parseOffset(r.URL.Query().Get("offset"), 0)
+
+	whereClauses := []string{"1=1"}
+	countArgs := make([]any, 0, 8)
+	if q != "" {
+		countArgs = append(countArgs, q)
+		whereClauses = append(whereClauses, fmt.Sprintf("p.title ILIKE '%%' || $%d || '%%'", len(countArgs)))
+	}
+	if len(difficulties) > 0 {
+		placeholders := make([]string, 0, len(difficulties))
+		for _, d := range difficulties {
+			countArgs = append(countArgs, d)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(countArgs)))
+		}
+		whereClauses = append(whereClauses, "p.difficulty IN ("+strings.Join(placeholders, ",")+")")
+	}
+	if len(companyIDs) > 0 {
+		placeholders := make([]string, 0, len(companyIDs))
+		for _, id := range companyIDs {
+			countArgs = append(countArgs, id)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(countArgs)))
+		}
+		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM company_problems cpx WHERE cpx.problem_id = p.id AND cpx.company_id IN ("+strings.Join(placeholders, ",")+"))")
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	err = pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM problems p WHERE "+whereSQL, countArgs...).Scan(&total)
+	if err != nil {
+		http.Error(w, "failed to count problems", http.StatusInternalServerError)
+		return
+	}
+
+	queryArgs := append([]any{}, countArgs...)
+	matchedExpr := "0::float8"
+	if len(companyIDs) > 0 {
+		placeholders := make([]string, 0, len(companyIDs))
+		for _, id := range companyIDs {
+			queryArgs = append(queryArgs, id)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(queryArgs)))
+		}
+		matchedExpr = "COALESCE(SUM(CASE WHEN cp.company_id IN (" + strings.Join(placeholders, ",") + ") THEN cp.frequency ELSE 0 END), 0)::float8"
+	}
+
+	orderBy := "total_frequency DESC, p.title ASC"
+	switch sortBy {
+	case "difficulty":
+		orderBy = "CASE p.difficulty WHEN 'Easy' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Hard' THEN 3 ELSE 4 END ASC, total_frequency DESC, p.title ASC"
+	case "company":
+		if len(companyIDs) > 0 {
+			orderBy = "matched_frequency DESC, total_frequency DESC, p.title ASC"
+		}
+	}
+
+	queryArgs = append(queryArgs, limit, offset)
+	limitPos := len(queryArgs) - 1
+	offsetPos := len(queryArgs)
 
 	rows, err := pool.Query(r.Context(), `
 		SELECT
@@ -58,25 +129,26 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			p.difficulty,
 			COALESCE(p.acceptance_rate, 0)::float8 AS acceptance_rate,
 			p.link,
-			COALESCE(SUM(cp.frequency), 0)::float8 AS total_frequency
+			COALESCE(SUM(cp.frequency), 0)::float8 AS total_frequency,
+			`+matchedExpr+` AS matched_frequency
 		FROM problems p
 		LEFT JOIN company_problems cp ON cp.problem_id = p.id
-		WHERE ($1 = '' OR p.title ILIKE '%' || $1 || '%')
-		  AND ($2 = '' OR p.difficulty = $2)
+		WHERE `+whereSQL+`
 		GROUP BY p.id, p.title, p.difficulty, p.acceptance_rate, p.link
-		ORDER BY total_frequency DESC, p.title ASC
-		LIMIT $3
-	`, q, difficulty, limit)
+		ORDER BY `+orderBy+`
+		LIMIT $`+strconv.Itoa(limitPos)+`
+		OFFSET $`+strconv.Itoa(offsetPos)+`
+	`, queryArgs...)
 	if err != nil {
 		http.Error(w, "failed to load problems", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	items := make([]problemSummary, 0, 2048)
+	items := make([]problemSummary, 0, limit)
 	for rows.Next() {
 		var p problemSummary
-		if err := rows.Scan(&p.ID, &p.Title, &p.Difficulty, &p.AcceptanceRate, &p.Link, &p.TotalFrequency); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.Difficulty, &p.AcceptanceRate, &p.Link, &p.TotalFrequency, &p.MatchedFrequency); err != nil {
 			http.Error(w, "failed to decode problem", http.StatusInternalServerError)
 			return
 		}
@@ -87,7 +159,30 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(problemsResponse{Items: items, Total: len(items)})
+	_ = json.NewEncoder(w).Encode(problemsResponse{Items: items, Total: total})
+}
+
+func parseDifficultyList(raw string) ([]string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || strings.EqualFold(trimmed, "all") {
+		return nil, nil
+	}
+
+	parts := strings.Split(trimmed, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		v, err := parseDifficulty(part)
+		if err != nil {
+			return nil, err
+		}
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out, nil
 }
 
 func parseDifficulty(raw string) (string, error) {
@@ -103,6 +198,59 @@ func parseDifficulty(raw string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid difficulty: %q", raw)
 	}
+}
+
+func parseCompanyIDs(rawValues ...string) ([]int, error) {
+	merged := strings.Join(rawValues, ",")
+	if strings.TrimSpace(merged) == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(merged, ",")
+	seen := map[int]bool{}
+	out := make([]int, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		id, err := strconv.Atoi(trimmed)
+		if err != nil || id <= 0 {
+			return nil, fmt.Errorf("invalid company id: %q", part)
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	sort.Ints(out)
+	return out, nil
+}
+
+func parseSort(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "frequency":
+		return "frequency", nil
+	case "difficulty":
+		return "difficulty", nil
+	case "company":
+		return "company", nil
+	default:
+		return "", fmt.Errorf("invalid sort: %q", raw)
+	}
+}
+
+func parseOffset(raw string, defaultValue int) int {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return defaultValue
+	}
+	n, err := strconv.Atoi(trimmed)
+	if err != nil || n < 0 {
+		return defaultValue
+	}
+	return n
 }
 
 func parseLimit(raw string, defaultValue, maxValue int) int {

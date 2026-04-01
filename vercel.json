@@ -2,7 +2,7 @@
   "routes": [
     { "src": "^/$", "dest": "/index.html" },
     { "src": "^/companies$", "dest": "/companies.html" },
-    { "src": "^/problems$", "dest": "/problems.html" },
+    { "src": "^/problems$", "dest": "/" },
 
     { "src": "^/api/top$", "dest": "/api/top.go" },
     { "src": "^/api/companies$", "dest": "/api/companies.go" },

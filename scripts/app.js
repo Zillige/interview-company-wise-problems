@@ -1,5 +1,7 @@
 (() => {
   const CACHE_PREFIX = 'icwp:cache:v1:';
+  const PROGRESS_KEY = 'icwp:progress:v1';
+  const PROGRESS_STATUSES = ['Not solved', 'Solved'];
   const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 
   const memoryCache = new Map();
@@ -77,7 +79,42 @@
     return req;
   }
 
+  function readProgressMap() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+      const out = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        const id = String(key);
+        const rawStatus = value?.status;
+        const status = rawStatus === 'Solved' ? 'Solved' : 'Not solved';
+        if (!PROGRESS_STATUSES.includes(status)) continue;
+        out[id] = {
+          status,
+          updatedAt: Number.isFinite(value?.updatedAt) ? value.updatedAt : now()
+        };
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  function writeProgressMap(progressMap) {
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressMap));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   window.App = {
+    statuses: PROGRESS_STATUSES,
+
     difficultyClass(level) {
       const v = (level || '').toLowerCase();
       if (v === 'easy') return 'easy';
@@ -145,6 +182,45 @@
     formatNum(value) {
       const n = Number(value || 0);
       return n.toFixed(2);
+    },
+
+    getProgressMap() {
+      return readProgressMap();
+    },
+
+    getProblemStatus(problemId) {
+      const id = String(problemId);
+      const map = readProgressMap();
+      return map[id]?.status || 'Not solved';
+    },
+
+    setProblemStatus(problemId, status) {
+      const id = String(problemId);
+      if (!PROGRESS_STATUSES.includes(status)) return false;
+
+      const map = readProgressMap();
+      if (status === 'Not solved') {
+        delete map[id];
+      } else {
+        map[id] = { status, updatedAt: now() };
+      }
+      return writeProgressMap(map);
+    },
+
+    computeSolvedStats(problems = []) {
+      const map = readProgressMap();
+      const total = Array.isArray(problems) ? problems.length : 0;
+      if (!total) return { solved: 0, total: 0, pct: 0 };
+
+      let solved = 0;
+      for (const p of problems) {
+        if (!p) continue;
+        const id = String(p.id);
+        if (map[id]?.status === 'Solved') solved++;
+      }
+
+      const pct = (solved / total) * 100;
+      return { solved, total, pct };
     }
   };
 })();

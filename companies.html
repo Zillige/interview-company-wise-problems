@@ -15,7 +15,6 @@
         <nav class="nav">
           <a href="/">Home</a>
           <a href="/companies">Companies</a>
-          <a href="/problems">Problems</a>
         </nav>
       </header>
 
@@ -49,6 +48,7 @@
                 <div>
                   <h2 x-text="selectedCompany.name"></h2>
                   <p x-text="`${selectedCompany.problem_count} mapped problems`"></p>
+                  <p class="progress-text" x-text="selectedCompletionText()"></p>
                 </div>
               </div>
 
@@ -60,6 +60,9 @@
                   <li>
                     <a :href="problem.link" target="_blank" rel="noreferrer" x-text="problem.title"></a>
                     <span class="badge" :class="App.difficultyClass(problem.difficulty)" x-text="problem.difficulty"></span>
+                    <label class="solved-check">
+                      <input type="checkbox" :checked="isSolved(problem.id)" @change="toggleSolved(problem.id, $event.target.checked)" /> Solved
+                    </label>
                   </li>
                 </template>
               </ul>
@@ -85,9 +88,11 @@
           selectedCompanyId: null,
           selectedCompany: null,
           companyProblems: [],
+          companyProblemsAll: [],
           detailLoading: false,
           detailError: '',
           cache: {},
+          progressVersion: 0,
           rowHeight: 56,
           viewportHeight: 560,
           scrollTop: 0,
@@ -152,23 +157,39 @@
             this.detailError = '';
 
             if (this.cache[company.id]) {
-              this.companyProblems = this.cache[company.id];
+              this.companyProblemsAll = this.cache[company.id];
+              this.companyProblems = this.companyProblemsAll.slice(0, 100);
               return;
             }
 
             this.detailLoading = true;
             this.companyProblems = [];
+            this.companyProblemsAll = [];
             try {
               const res = await this.App.fetchJson(`/api/company?id=${company.id}`);
-              const problems = (res.problems || []).slice(0, 100);
+              const problems = res.problems || [];
               this.cache[company.id] = problems;
-              this.companyProblems = problems;
+              this.companyProblemsAll = problems;
+              this.companyProblems = problems.slice(0, 100);
             } catch (e) {
               this.detailError = e.message || 'Failed to load company problems';
             } finally {
               this.detailLoading = false;
             }
-          }
+          },
+          isSolved(problemId) {
+            this.progressVersion;
+            return this.App.getProblemStatus(problemId) === 'Solved';
+          },
+          toggleSolved(problemId, checked) {
+            this.App.setProblemStatus(problemId, checked ? 'Solved' : 'Not solved');
+            this.progressVersion++;
+          },
+          selectedCompletionText() {
+            this.progressVersion;
+            const stats = this.App.computeSolvedStats(this.companyProblemsAll || []);
+            return `Solved: ${stats.solved}/${stats.total} (${this.App.formatPct(stats.pct)})`;
+          },
         }
       }
     </script>
