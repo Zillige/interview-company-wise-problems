@@ -44,7 +44,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600")
+	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800")
 
 	pool, err := getDB(r.Context())
 	if err != nil {

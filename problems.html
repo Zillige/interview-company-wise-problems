@@ -67,6 +67,13 @@
               const res = await this.App.fetchJson('/api/problems?limit=5000');
               this.all = res.items || [];
               this.applyFilters();
+
+              const warm = () => {
+                this.App.prefetch('/api/top?limit=25');
+                this.App.prefetch('/api/companies');
+              };
+              if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 1200 });
+              else setTimeout(warm, 250);
             } catch (e) {
               this.error = e.message || 'Failed to load problems';
             } finally {

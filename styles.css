@@ -8,7 +8,7 @@
 body { margin: 0; background: #eff5ff; }
 
 .container {
-  max-width: 1200px;
+  max-width: 90vw;
   margin: 0 auto;
   padding: 24px;
 }
@@ -24,15 +24,20 @@ body { margin: 0; background: #eff5ff; }
 .header h1 { margin: 0; font-size: 1.9rem; }
 .subtitle { margin: 0 0 18px; color: #475569; }
 
-.nav { display: flex; gap: 8px; }
+.nav { display: flex; gap: 10px; }
 .nav a {
   text-decoration: none;
   color: #0f172a;
   background: #fff;
-  border: 1px solid #dbe5f5;
-  border-radius: 999px;
+  border: 3px solid #dbe5f5;
+  border-radius: 10px;
   padding: 8px 12px;
   font-size: .92rem;
+  box-shadow: 0px 0px 3px #000000;
+}
+.nav a:hover {
+  transform: scale(1.03);
+  box-shadow: 0px 0px 5px #000000;
 }
 
 .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
@@ -86,6 +91,7 @@ body { margin: 0; background: #eff5ff; }
   border-radius: 6px;
   border: 1px solid #e2e8f0;
   background: #fff;
+  box-shadow: 0px 0px 1px;
 }
 .logo.large { width: 38px; height: 38px; }
 

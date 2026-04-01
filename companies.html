@@ -104,6 +104,14 @@
               const res = await this.App.fetchJson('/api/companies');
               this.companies = res.items || [];
               this.filtered = this.companies;
+
+              const warm = () => {
+                for (const c of this.companies.slice(0, 12)) {
+                  this.App.prefetch(`/api/company?id=${c.id}`);
+                }
+              };
+              if ('requestIdleCallback' in window) requestIdleCallback(warm, { timeout: 1500 });
+              else setTimeout(warm, 300);
             } catch (e) {
               this.error = e.message || 'Failed to load companies';
             } finally {
