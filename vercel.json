@@ -1,0 +1,13 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "src": "/api/companies",
+      "dest": "/api/companies.go"
+    },
+    {
+      "src": "/api/problems",
+      "dest": "/api/problems.go"
+    }
+  ]
+}
