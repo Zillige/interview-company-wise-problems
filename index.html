@@ -84,6 +84,7 @@
         </template>
       </section>
 
+      <div class="panel-state" x-show="showRefreshOrderHint">Refreshing order…</div>
       <div class="panel-state" x-show="loadingMore">Loading more problems...</div>
       <p class="panel-state" x-show="!loading && !error && !problems.length">No problems found for this filter.</p>
       <p class="panel-state error" x-show="error" x-text="error"></p>
@@ -121,6 +122,7 @@
           sortBy: 'frequency',
           difficultySortDir: 'asc',
           problems: [],
+          confirmedProblems: [],
           companies: [],
           selectedCompanyIds: [],
           companySearch: '',
@@ -132,8 +134,13 @@
           hasMore: true,
           observer: null,
           progressVersion: 0,
+          companyToProblemSet: new Map(),
+          firstPageCache: new Map(),
+          isOptimisticUpdating: false,
+          optimisticOrderPending: false,
+          fetchToken: 0,
           async init() {
-            await this.loadCompanies();
+            await Promise.all([this.loadCompanies(), this.loadCompanyProblemMap()]);
             await this.resetAndLoad();
             this.initObserver();
           },
@@ -143,6 +150,24 @@
               this.companies = companiesRes.items || [];
             } catch (e) {
               this.error = e.message || 'Failed to load companies';
+            }
+          },
+          async loadCompanyProblemMap() {
+            try {
+              const res = await this.App.fetchJson('/api/company-progress');
+              const items = res.items || [];
+              const map = new Map();
+              for (const item of items) {
+                const id = Number(item?.id);
+                if (!Number.isFinite(id) || id <= 0) continue;
+                const set = new Set((item?.problem_ids || [])
+                  .map(v => Number(v))
+                  .filter(v => Number.isFinite(v) && v > 0));
+                map.set(id, set);
+              }
+              this.companyToProblemSet = map;
+            } catch {
+              this.companyToProblemSet = new Map();
             }
           },
           get filteredCompanies() {
@@ -155,26 +180,141 @@
             const selected = new Set(this.selectedCompanyIds);
             return this.companies.filter(c => selected.has(c.id));
           },
+          get showRefreshOrderHint() {
+            return this.optimisticOrderPending && this.isOptimisticUpdating;
+          },
+          normalizedCompanyIds(ids) {
+            const out = [...new Set((ids || [])
+              .map(v => Number(v))
+              .filter(v => Number.isFinite(v) && v > 0))];
+            out.sort((a, b) => a - b);
+            return out;
+          },
+          getCompanyUnionSet(ids) {
+            const selected = this.normalizedCompanyIds(ids);
+            if (!selected.length || !this.companyToProblemSet.size) return null;
+            const union = new Set();
+            for (const id of selected) {
+              const set = this.companyToProblemSet.get(id);
+              if (!set) continue;
+              for (const pid of set) union.add(pid);
+            }
+            return union;
+          },
+          applyOptimisticFilter(ids) {
+            const union = this.getCompanyUnionSet(ids);
+            if (!union) return false;
+            this.problems = this.confirmedProblems.filter(p => union.has(Number(p.id)));
+            return true;
+          },
+          getFirstPageCacheKey(ids = this.selectedCompanyIds) {
+            const normalized = this.normalizedCompanyIds(ids);
+            const parts = [
+              `sort=${this.sortBy}`,
+              `dir=${this.sortBy === 'difficulty' ? this.difficultySortDir : 'na'}`,
+              `companies=${normalized.join(',')}`
+            ];
+            return parts.join('|');
+          },
+          applyFirstPageData(res) {
+            const items = Array.isArray(res?.items) ? res.items : [];
+            this.confirmedProblems = [...items];
+            this.problems = [...items];
+            this.total = Number(res?.total || 0);
+            this.offset = items.length;
+            if (typeof res?.has_more === 'boolean') {
+              this.hasMore = res.has_more;
+            } else {
+              this.hasMore = this.offset < this.total && items.length > 0;
+            }
+          },
+          cacheCurrentFirstPage(res) {
+            const key = this.getFirstPageCacheKey();
+            this.firstPageCache.set(key, {
+              items: Array.isArray(res?.items) ? [...res.items] : [],
+              total: Number(res?.total || 0),
+              has_more: typeof res?.has_more === 'boolean' ? res.has_more : undefined
+            });
+          },
           toggleCompany(companyId) {
             const id = Number(companyId);
-            if (!id) return;
+            if (!id) return this.selectedCompanyIds;
             if (this.selectedCompanyIds.includes(id)) {
-              this.selectedCompanyIds = this.selectedCompanyIds.filter(v => v !== id);
-              return;
+              return this.selectedCompanyIds.filter(v => v !== id);
             }
-            this.selectedCompanyIds = [...this.selectedCompanyIds, id];
+            return [...this.selectedCompanyIds, id];
           },
           async toggleCompanyAndRefetch(companyId) {
-            this.toggleCompany(companyId);
-            await this.resetAndLoad();
+            const nextIds = this.toggleCompany(companyId);
+            await this.applyCompanySelection(nextIds);
           },
           async removeCompany(companyId) {
-            this.selectedCompanyIds = this.selectedCompanyIds.filter(v => v !== Number(companyId));
-            await this.resetAndLoad();
+            const nextIds = this.selectedCompanyIds.filter(v => v !== Number(companyId));
+            await this.applyCompanySelection(nextIds);
           },
           async clearCompanies() {
-            this.selectedCompanyIds = [];
-            await this.resetAndLoad();
+            await this.applyCompanySelection([]);
+          },
+          async applyCompanySelection(nextIds) {
+            const normalizedNext = this.normalizedCompanyIds(nextIds);
+            const unchanged = normalizedNext.length === this.selectedCompanyIds.length
+              && normalizedNext.every((v, i) => v === this.selectedCompanyIds[i]);
+            if (unchanged) return;
+
+            const previousState = {
+              selectedCompanyIds: [...this.selectedCompanyIds],
+              confirmedProblems: [...this.confirmedProblems],
+              problems: [...this.problems],
+              total: this.total,
+              offset: this.offset,
+              hasMore: this.hasMore,
+            };
+
+            this.selectedCompanyIds = normalizedNext;
+            this.error = '';
+            this.loading = this.confirmedProblems.length === 0;
+            this.loadingMore = false;
+            this.isOptimisticUpdating = true;
+            this.optimisticOrderPending = true;
+            this.hasMore = false;
+
+            const optimisticApplied = this.applyOptimisticFilter(normalizedNext);
+            if (!optimisticApplied && this.confirmedProblems.length > 0) {
+              this.problems = [...this.confirmedProblems];
+            }
+
+            const cacheKey = this.getFirstPageCacheKey(normalizedNext);
+            const cached = this.firstPageCache.get(cacheKey);
+            if (cached) {
+              this.applyFirstPageData(cached);
+              this.isOptimisticUpdating = false;
+              this.optimisticOrderPending = false;
+              this.loading = false;
+              return;
+            }
+
+            const token = ++this.fetchToken;
+            try {
+              const res = await this.App.fetchJson(this.buildProblemsUrl(0, normalizedNext));
+              if (token !== this.fetchToken) return;
+              this.applyFirstPageData(res);
+              this.cacheCurrentFirstPage(res);
+              this.isOptimisticUpdating = false;
+              this.optimisticOrderPending = false;
+            } catch (e) {
+              if (token !== this.fetchToken) return;
+              this.selectedCompanyIds = previousState.selectedCompanyIds;
+              this.confirmedProblems = previousState.confirmedProblems;
+              this.problems = previousState.problems;
+              this.total = previousState.total;
+              this.offset = previousState.offset;
+              this.hasMore = previousState.hasMore;
+              this.error = e.message || 'Failed to load problems';
+              this.isOptimisticUpdating = false;
+              this.optimisticOrderPending = false;
+            } finally {
+              if (token === this.fetchToken) this.loading = false;
+            }
           },
           openCompanyModal() {
             this.lastFocusedElement = document.activeElement;
@@ -217,47 +357,105 @@
             }
           },
 
-          buildProblemsUrl() {
+          buildProblemsUrl(customOffset = this.offset, customCompanyIds = this.selectedCompanyIds) {
             const params = new URLSearchParams({
               limit: String(this.limit),
-              offset: String(this.offset),
+              offset: String(customOffset),
               sort: this.sortBy,
             });
             if (this.sortBy === 'difficulty') {
               params.set('sort_dir', this.difficultySortDir);
             }
-            if (this.selectedCompanyIds.length) {
-              params.set('company_ids', this.selectedCompanyIds.join(','));
+            const normalizedIds = this.normalizedCompanyIds(customCompanyIds);
+            if (normalizedIds.length) {
+              params.set('company_ids', normalizedIds.join(','));
             }
             return `/api/problems?${params.toString()}`;
           },
           async resetAndLoad() {
+            const token = ++this.fetchToken;
             this.loading = true;
             this.error = '';
-            this.problems = [];
-            this.offset = 0;
-            this.total = 0;
-            this.hasMore = true;
+
+            const hasCompanySelection = this.selectedCompanyIds.length > 0;
+            const optimisticEligible = hasCompanySelection && this.confirmedProblems.length > 0;
+
+            if (optimisticEligible) {
+              this.loadingMore = false;
+              this.offset = 0;
+              this.total = 0;
+              this.hasMore = false;
+              this.isOptimisticUpdating = true;
+              this.optimisticOrderPending = true;
+
+              const applied = this.applyOptimisticFilter(this.selectedCompanyIds);
+              if (!applied) {
+                this.problems = [...this.confirmedProblems];
+              }
+            } else {
+              this.problems = [];
+              this.confirmedProblems = [];
+              this.offset = 0;
+              this.total = 0;
+              this.hasMore = true;
+              this.isOptimisticUpdating = false;
+              this.optimisticOrderPending = false;
+            }
+
+            const key = this.getFirstPageCacheKey();
+            const cached = this.firstPageCache.get(key);
+            if (cached) {
+              this.applyFirstPageData(cached);
+              this.isOptimisticUpdating = false;
+              this.optimisticOrderPending = false;
+              this.loading = false;
+              return;
+            }
+
+            if (optimisticEligible) {
+              try {
+                const res = await this.App.fetchJson(this.buildProblemsUrl(0, this.selectedCompanyIds));
+                if (token !== this.fetchToken) return;
+                this.applyFirstPageData(res);
+                this.cacheCurrentFirstPage(res);
+                this.isOptimisticUpdating = false;
+                this.optimisticOrderPending = false;
+              } catch (e) {
+                if (token !== this.fetchToken) return;
+                this.error = e.message || 'Failed to load problems';
+                this.hasMore = false;
+                this.isOptimisticUpdating = false;
+                this.optimisticOrderPending = false;
+              } finally {
+                if (token === this.fetchToken) this.loading = false;
+              }
+              return;
+            }
+
             try {
               await this.fetchNextPage();
             } finally {
-              this.loading = false;
+              if (token === this.fetchToken) this.loading = false;
             }
           },
           async fetchNextPage() {
-            if (!this.hasMore || this.loadingMore) return;
+            if (!this.hasMore || this.loadingMore || this.isOptimisticUpdating) return;
             this.loadingMore = true;
             this.error = '';
             try {
               const res = await this.App.fetchJson(this.buildProblemsUrl());
               const items = res.items || [];
               this.total = Number(res.total || 0);
-              this.problems = [...this.problems, ...items];
+              this.confirmedProblems = [...this.confirmedProblems, ...items];
+              this.problems = [...this.confirmedProblems];
               this.offset += items.length;
               if (typeof res.has_more === 'boolean') {
                 this.hasMore = res.has_more;
               } else {
                 this.hasMore = this.offset < this.total && items.length > 0;
+              }
+              if (this.offset === items.length) {
+                this.cacheCurrentFirstPage(res);
               }
             } catch (e) {
               this.error = e.message || 'Failed to load problems';
