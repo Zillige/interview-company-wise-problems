@@ -12,18 +12,13 @@
     <main class="container" x-data="homePage()" x-init="init()">
       <header class="header">
         <h1>What should I solve next?</h1>
-        <nav class="nav">
-          <a href="/">Home</a>
-          <a href="/companies">Companies</a>
-        </nav>
       </header>
 
       <p class="subtitle">Sort and filter problems by frequency, company, and difficulty.</p>
 
       <div class="filters" x-show="!error">
-        <select class="select" x-model="sortBy" @change="onSortChange()">
+        <select class="select" x-model="sortBy" @change="resetAndLoad()">
           <option value="frequency">Sort: Frequency</option>
-          <option value="company">Sort: Company</option>
           <option value="difficulty">Sort: Difficulty</option>
         </select>
 
@@ -38,7 +33,7 @@
 
       <div class="selected-companies" x-show="selectedCompanies.length">
         <template x-for="company in selectedCompanies" :key="company.id">
-          <button class="company-chip" @click="toggleCompany(company.id)">
+          <button class="company-chip" @click="removeCompany(company.id)">
             <img class="logo" :src="company.logo" :alt="company.name" loading="lazy" @error="$el.src='/logos/default.png'" />
             <span x-text="company.name"></span>
             <span>×</span>
@@ -95,15 +90,11 @@
 
           <div class="modal-grid">
             <template x-for="company in filteredCompanies" :key="company.id">
-              <button class="modal-company" :class="{active: selectedCompanyIds.includes(company.id)}" @click="toggleCompany(company.id)">
+              <button class="modal-company" :class="{active: selectedCompanyIds.includes(company.id)}" @click="toggleCompanyAndRefetch(company.id)">
                 <img class="logo large" :src="company.logo" :alt="company.name" loading="lazy" @error="$el.src='/logos/default.png'" />
                 <span x-text="company.name"></span>
               </button>
             </template>
-          </div>
-
-          <div class="modal-actions">
-            <button class="select modal-trigger" @click="applyCompanySelection()">Apply</button>
           </div>
         </div>
       </div>
@@ -160,18 +151,19 @@
             }
             this.selectedCompanyIds = [...this.selectedCompanyIds, id];
           },
+          async toggleCompanyAndRefetch(companyId) {
+            this.toggleCompany(companyId);
+            await this.resetAndLoad();
+          },
+          async removeCompany(companyId) {
+            this.selectedCompanyIds = this.selectedCompanyIds.filter(v => v !== Number(companyId));
+            await this.resetAndLoad();
+          },
           async clearCompanies() {
             this.selectedCompanyIds = [];
             await this.resetAndLoad();
           },
-          async applyCompanySelection() {
-            this.companyModalOpen = false;
-            await this.resetAndLoad();
-          },
-          async onSortChange() {
-            if (this.sortBy === 'company') this.companyModalOpen = true;
-            await this.resetAndLoad();
-          },
+
           buildProblemsUrl() {
             const params = new URLSearchParams({
               limit: String(this.limit),
