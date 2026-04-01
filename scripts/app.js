@@ -29,14 +29,6 @@
     }
   }
 
-  function deleteSession(url) {
-    try {
-      sessionStorage.removeItem(CACHE_PREFIX + url);
-    } catch {
-      // Ignore errors.
-    }
-  }
-
   function getCached(url) {
     const inMem = memoryCache.get(url);
     if (inMem) return inMem;
@@ -113,18 +105,12 @@
   }
 
   window.App = {
-    statuses: PROGRESS_STATUSES,
-
     difficultyClass(level) {
       const v = (level || '').toLowerCase();
       if (v === 'easy') return 'easy';
       if (v === 'medium') return 'medium';
       if (v === 'hard') return 'hard';
       return 'easy';
-    },
-
-    encodeCompany(name) {
-      return encodeURIComponent((name || '').trim());
     },
 
     async fetchJson(url, options = {}) {
@@ -148,35 +134,6 @@
       }
 
       return refresh(url);
-    },
-
-    prefetch(url, options = {}) {
-      return this.fetchJson(url, { ...options, staleWhileRevalidate: true })
-        .then(() => true)
-        .catch(() => false);
-    },
-
-    clearCache(url) {
-      if (!url) {
-        memoryCache.clear();
-        try {
-          for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const k = sessionStorage.key(i);
-            if (k && k.startsWith(CACHE_PREFIX)) sessionStorage.removeItem(k);
-          }
-        } catch {
-          // Ignore errors.
-        }
-        return;
-      }
-
-      memoryCache.delete(url);
-      deleteSession(url);
-    },
-
-    formatPct(value) {
-      const n = Number(value || 0);
-      return `${n.toFixed(2)}%`;
     },
 
     formatNum(value) {
@@ -206,21 +163,5 @@
       }
       return writeProgressMap(map);
     },
-
-    computeSolvedStats(problems = []) {
-      const map = readProgressMap();
-      const total = Array.isArray(problems) ? problems.length : 0;
-      if (!total) return { solved: 0, total: 0, pct: 0 };
-
-      let solved = 0;
-      for (const p of problems) {
-        if (!p) continue;
-        const id = String(p.id);
-        if (map[id]?.status === 'Solved') solved++;
-      }
-
-      const pct = (solved / total) * 100;
-      return { solved, total, pct };
-    }
   };
 })();

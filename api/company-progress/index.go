@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"context"
@@ -13,16 +13,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type companySummary struct {
-	ID           int    `json:"id"`
+type companyProgressItem struct {
+	ID           int   `json:"id"`
 	Name         string `json:"name"`
 	Logo         string `json:"logo"`
 	ProblemCount int    `json:"problem_count"`
+	ProblemIDs   []int  `json:"problem_ids"`
 }
 
-type companiesResponse struct {
-	Items []companySummary `json:"items"`
-	Total int              `json:"total"`
+type companyProgressResponse struct {
+	Items []companyProgressItem `json:"items"`
+	Total int                   `json:"total"`
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +33,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800")
+	w.Header().Set("Cache-Control", "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400")
 
 	pool, err := getDB(r.Context())
 	if err != nil {
@@ -41,34 +42,45 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := pool.Query(r.Context(), `
-		SELECT c.id, c.name, COUNT(cp.problem_id)::int AS problem_count
+		SELECT
+			c.id,
+			c.name,
+			COUNT(cp.problem_id)::int AS problem_count,
+			COALESCE(array_agg(cp.problem_id ORDER BY cp.problem_id) FILTER (WHERE cp.problem_id IS NOT NULL), '{}') AS problem_ids
 		FROM companies c
 		LEFT JOIN company_problems cp ON cp.company_id = c.id
 		GROUP BY c.id, c.name
 		ORDER BY c.name ASC
 	`)
 	if err != nil {
-		http.Error(w, "failed to load companies", http.StatusInternalServerError)
+		http.Error(w, "failed to load company progress data", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	items := make([]companySummary, 0, 512)
+	items := make([]companyProgressItem, 0, 512)
 	for rows.Next() {
-		var c companySummary
-		if err := rows.Scan(&c.ID, &c.Name, &c.ProblemCount); err != nil {
-			http.Error(w, "failed to decode company", http.StatusInternalServerError)
+		var (
+			item   companyProgressItem
+			idList []int32
+		)
+		if err := rows.Scan(&item.ID, &item.Name, &item.ProblemCount, &idList); err != nil {
+			http.Error(w, "failed to decode company progress data", http.StatusInternalServerError)
 			return
 		}
-		c.Logo = logoPath(c.Name)
-		items = append(items, c)
+		item.Logo = logoPath(item.Name)
+		item.ProblemIDs = make([]int, 0, len(idList))
+		for _, id := range idList {
+			item.ProblemIDs = append(item.ProblemIDs, int(id))
+		}
+		items = append(items, item)
 	}
 	if rows.Err() != nil {
-		http.Error(w, "error iterating companies", http.StatusInternalServerError)
+		http.Error(w, "error iterating company progress data", http.StatusInternalServerError)
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(companiesResponse{Items: items, Total: len(items)})
+	_ = json.NewEncoder(w).Encode(companyProgressResponse{Items: items, Total: len(items)})
 }
 
 func logoPath(company string) string {

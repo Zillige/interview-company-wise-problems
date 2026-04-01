@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Company Progress</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/scripts/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  </head>
+  <body>
+    <main class="container" x-data="companiesPage()" x-init="init()">
+      <header class="header">
+        <h1>Company progress</h1>
+        <div class="header-actions">
+          <a class="select page-link" href="/">← Back to problems</a>
+        </div>
+      </header>
+
+      <p class="subtitle">Based on your locally marked solved questions.</p>
+
+      <div class="filters" x-show="!error">
+        <input class="search" type="text" x-model="search" placeholder="Search companies..." />
+
+        <label class="toggle-inline">
+          <input type="checkbox" x-model="onlyStarted" />
+          <span>Only companies with solved questions</span>
+        </label>
+
+        <button class="select modal-trigger" type="button" @click="recompute()">Recalculate</button>
+      </div>
+
+      <div class="panel-state" x-show="!error">
+        <span x-text="`Solved across ${startedCompanies} / ${items.length} companies`"></span>
+      </div>
+
+      <section class="cards" x-show="loading">
+        <template x-for="n in 9" :key="n">
+          <article class="card skeleton-card">
+            <div class="skeleton line w-70"></div>
+            <div class="skeleton line w-50"></div>
+            <div class="skeleton line w-60"></div>
+          </article>
+        </template>
+      </section>
+
+      <section class="cards" x-show="!loading && !error && filteredItems.length">
+        <template x-for="company in filteredItems" :key="company.id">
+          <article class="card">
+            <div class="card-header company-head">
+              <div class="company-title">
+                <img class="logo large" :src="company.logo" :alt="company.name" loading="lazy" @error="$el.src='/logos/default.png'" />
+                <strong x-text="company.name"></strong>
+              </div>
+              <span class="progress-pill" x-text="`${App.formatNum(company.pct)}%`"></span>
+            </div>
+
+            <div class="meta">
+              <span x-text="`${company.solved_count} solved`"></span>
+              <span x-text="`${company.problem_count} total`"></span>
+            </div>
+
+            <div class="progress-track" role="progressbar" :aria-valuenow="Math.round(company.pct)" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-fill" :style="`width:${Math.min(company.pct, 100)}%`"></div>
+            </div>
+          </article>
+        </template>
+      </section>
+
+      <p class="panel-state" x-show="!loading && !error && !filteredItems.length">No companies match your filters.</p>
+      <p class="panel-state error" x-show="error" x-text="error"></p>
+    </main>
+
+    <script>
+      function companiesPage() {
+        return {
+          App: window.App,
+          loading: true,
+          error: '',
+          items: [],
+          search: '',
+          onlyStarted: false,
+          async init() {
+            await this.load();
+            window.addEventListener('storage', this.recompute.bind(this));
+          },
+          async load() {
+            this.loading = true;
+            this.error = '';
+            try {
+              const res = await this.App.fetchJson('/api/company-progress');
+              this.items = (res.items || []).map(item => ({
+                ...item,
+                solved_count: 0,
+                pct: 0
+              }));
+              this.recompute();
+            } catch (e) {
+              this.error = e.message || 'Failed to load company progress';
+            } finally {
+              this.loading = false;
+            }
+          },
+          recompute() {
+            const progress = this.App.getProgressMap();
+            const solved = new Set(
+              Object.entries(progress)
+                .filter(([, v]) => v && v.status === 'Solved')
+                .map(([id]) => Number(id))
+                .filter(v => Number.isFinite(v) && v > 0)
+            );
+
+            this.items = this.items.map(item => {
+              const ids = Array.isArray(item.problem_ids) ? item.problem_ids : [];
+              let solvedCount = 0;
+              for (const pid of ids) {
+                if (solved.has(Number(pid))) solvedCount++;
+              }
+              const total = Number(item.problem_count || ids.length || 0);
+              const pct = total > 0 ? (solvedCount / total) * 100 : 0;
+              return {
+                ...item,
+                solved_count: solvedCount,
+                pct
+              };
+            });
+          },
+          get startedCompanies() {
+            return this.items.filter(c => c.solved_count > 0).length;
+          },
+          get filteredItems() {
+            const q = this.search.trim().toLowerCase();
+            return this.items
+              .filter(c => !q || c.name.toLowerCase().includes(q))
+              .filter(c => !this.onlyStarted || c.solved_count > 0)
+              .sort((a, b) => {
+                if (b.pct !== a.pct) return b.pct - a.pct;
+                if (b.solved_count !== a.solved_count) return b.solved_count - a.solved_count;
+                return a.name.localeCompare(b.name);
+              });
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

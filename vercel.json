@@ -1,12 +1,11 @@
 {
   "routes": [
     { "src": "^/$", "dest": "/index.html" },
-    { "src": "^/problems$", "dest": "/" },
+    { "src": "^/companies$", "dest": "/companies.html" },
 
-    { "src": "^/api/top$", "dest": "/api/top.go" },
-    { "src": "^/api/companies$", "dest": "/api/companies.go" },
-    { "src": "^/api/company$", "dest": "/api/company.go" },
-    { "src": "^/api/problems$", "dest": "/api/problems.go" },
+    { "src": "^/api/companies$", "dest": "/api/companies" },
+    { "src": "^/api/problems$", "dest": "/api/problems" },
+    { "src": "^/api/company-progress$", "dest": "/api/company-progress" },
 
     { "src": "/(.*)", "dest": "/$1" }
   ]
