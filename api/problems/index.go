@@ -98,7 +98,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	var total int
 	err = pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM problems p WHERE "+whereSQL, countArgs...).Scan(&total)
 	if err != nil {
-		http.Error(w, "failed to count problems", http.StatusInternalServerError)
+		http.Error(w, "failed to count problems: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
