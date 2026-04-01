@@ -84,7 +84,8 @@
         </template>
       </section>
 
-      <div class="panel-state" x-show="showRefreshOrderHint">Refreshing order…</div>
+      <div class="panel-state" x-show="showRefreshOrderHint">Showing optimistic results. Syncing with server…</div>
+      <div class="panel-state" x-show="showServerAdjustedHint">Updated to server-confirmed results.</div>
       <div class="panel-state" x-show="loadingMore">Loading more problems...</div>
       <p class="panel-state" x-show="!loading && !error && !problems.length">No problems found for this filter.</p>
       <p class="panel-state error" x-show="error" x-text="error"></p>
@@ -138,6 +139,8 @@
           firstPageCache: new Map(),
           isOptimisticUpdating: false,
           optimisticOrderPending: false,
+          serverAdjustedHint: false,
+          serverAdjustedHintTimer: null,
           fetchToken: 0,
           async init() {
             await Promise.all([this.loadCompanies(), this.loadCompanyProblemMap()]);
@@ -183,6 +186,9 @@
           get showRefreshOrderHint() {
             return this.optimisticOrderPending && this.isOptimisticUpdating;
           },
+          get showServerAdjustedHint() {
+            return this.serverAdjustedHint;
+          },
           normalizedCompanyIds(ids) {
             const out = [...new Set((ids || [])
               .map(v => Number(v))
@@ -201,11 +207,65 @@
             }
             return union;
           },
+          difficultyRank(value) {
+            if (value === 'Easy') return 1;
+            if (value === 'Medium') return 2;
+            if (value === 'Hard') return 3;
+            return 4;
+          },
+          sortProblemsLocally(items) {
+            const out = [...items];
+            if (this.sortBy === 'difficulty') {
+              const dir = this.difficultySortDir === 'desc' ? -1 : 1;
+              out.sort((a, b) => {
+                const diffRank = (this.difficultyRank(a?.difficulty) - this.difficultyRank(b?.difficulty)) * dir;
+                if (diffRank !== 0) return diffRank;
+                const freqDiff = Number(b?.total_frequency || 0) - Number(a?.total_frequency || 0);
+                if (freqDiff !== 0) return freqDiff;
+                return String(a?.title || '').localeCompare(String(b?.title || ''));
+              });
+              return out;
+            }
+
+            out.sort((a, b) => {
+              const freqDiff = Number(b?.total_frequency || 0) - Number(a?.total_frequency || 0);
+              if (freqDiff !== 0) return freqDiff;
+              return String(a?.title || '').localeCompare(String(b?.title || ''));
+            });
+            return out;
+          },
           applyOptimisticFilter(ids) {
             const union = this.getCompanyUnionSet(ids);
             if (!union) return false;
-            this.problems = this.confirmedProblems.filter(p => union.has(Number(p.id)));
+            const filtered = this.confirmedProblems.filter(p => union.has(Number(p.id)));
+            this.problems = this.sortProblemsLocally(filtered);
             return true;
+          },
+          didListDiffer(before, after) {
+            if (!Array.isArray(before) || !Array.isArray(after)) return false;
+            if (before.length !== after.length) return true;
+            for (let i = 0; i < before.length; i++) {
+              const a = before[i];
+              const b = after[i];
+              if (Number(a?.id) !== Number(b?.id)) return true;
+              if (Number(a?.total_frequency) !== Number(b?.total_frequency)) return true;
+            }
+            return false;
+          },
+          markServerAdjustedHint() {
+            this.serverAdjustedHint = true;
+            if (this.serverAdjustedHintTimer) clearTimeout(this.serverAdjustedHintTimer);
+            this.serverAdjustedHintTimer = setTimeout(() => {
+              this.serverAdjustedHint = false;
+              this.serverAdjustedHintTimer = null;
+            }, 2500);
+          },
+          clearServerAdjustedHint() {
+            this.serverAdjustedHint = false;
+            if (this.serverAdjustedHintTimer) {
+              clearTimeout(this.serverAdjustedHintTimer);
+              this.serverAdjustedHintTimer = null;
+            }
           },
           getFirstPageCacheKey(ids = this.selectedCompanyIds) {
             const normalized = this.normalizedCompanyIds(ids);
@@ -272,6 +332,7 @@
 
             this.selectedCompanyIds = normalizedNext;
             this.error = '';
+            this.clearServerAdjustedHint();
             this.loading = this.confirmedProblems.length === 0;
             this.loadingMore = false;
             this.isOptimisticUpdating = true;
@@ -280,13 +341,17 @@
 
             const optimisticApplied = this.applyOptimisticFilter(normalizedNext);
             if (!optimisticApplied && this.confirmedProblems.length > 0) {
-              this.problems = [...this.confirmedProblems];
+              this.problems = this.sortProblemsLocally(this.confirmedProblems);
             }
 
+            const optimisticSnapshot = [...this.problems];
             const cacheKey = this.getFirstPageCacheKey(normalizedNext);
             const cached = this.firstPageCache.get(cacheKey);
             if (cached) {
               this.applyFirstPageData(cached);
+              if (this.didListDiffer(optimisticSnapshot, this.problems)) {
+                this.markServerAdjustedHint();
+              }
               this.isOptimisticUpdating = false;
               this.optimisticOrderPending = false;
               this.loading = false;
@@ -298,6 +363,9 @@
               const res = await this.App.fetchJson(this.buildProblemsUrl(0, normalizedNext));
               if (token !== this.fetchToken) return;
               this.applyFirstPageData(res);
+              if (this.didListDiffer(optimisticSnapshot, this.problems)) {
+                this.markServerAdjustedHint();
+              }
               this.cacheCurrentFirstPage(res);
               this.isOptimisticUpdating = false;
               this.optimisticOrderPending = false;
@@ -376,9 +444,9 @@
             const token = ++this.fetchToken;
             this.loading = true;
             this.error = '';
+            this.clearServerAdjustedHint();
 
-            const hasCompanySelection = this.selectedCompanyIds.length > 0;
-            const optimisticEligible = hasCompanySelection && this.confirmedProblems.length > 0;
+            const optimisticEligible = this.confirmedProblems.length > 0;
 
             if (optimisticEligible) {
               this.loadingMore = false;
@@ -390,7 +458,7 @@
 
               const applied = this.applyOptimisticFilter(this.selectedCompanyIds);
               if (!applied) {
-                this.problems = [...this.confirmedProblems];
+                this.problems = this.sortProblemsLocally(this.confirmedProblems);
               }
             } else {
               this.problems = [];
@@ -402,10 +470,14 @@
               this.optimisticOrderPending = false;
             }
 
+            const optimisticSnapshot = optimisticEligible ? [...this.problems] : [];
             const key = this.getFirstPageCacheKey();
             const cached = this.firstPageCache.get(key);
             if (cached) {
               this.applyFirstPageData(cached);
+              if (optimisticEligible && this.didListDiffer(optimisticSnapshot, this.problems)) {
+                this.markServerAdjustedHint();
+              }
               this.isOptimisticUpdating = false;
               this.optimisticOrderPending = false;
               this.loading = false;
@@ -417,6 +489,9 @@
                 const res = await this.App.fetchJson(this.buildProblemsUrl(0, this.selectedCompanyIds));
                 if (token !== this.fetchToken) return;
                 this.applyFirstPageData(res);
+                if (this.didListDiffer(optimisticSnapshot, this.problems)) {
+                  this.markServerAdjustedHint();
+                }
                 this.cacheCurrentFirstPage(res);
                 this.isOptimisticUpdating = false;
                 this.optimisticOrderPending = false;
