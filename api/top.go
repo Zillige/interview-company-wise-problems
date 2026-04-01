@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -162,11 +162,33 @@ func parseLimit(raw string, defaultValue int) int {
 }
 
 func logoPath(company string) string {
-	name := strings.TrimSpace(company)
-	if name == "" {
+	slug := logoSlug(company)
+	if slug == "" {
 		return "/logos/default.png"
 	}
-	return "/logos/" + url.PathEscape(name) + ".png"
+	return "/logos/" + slug + ".png"
+}
+
+func logoSlug(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	prevDash := false
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if !prevDash {
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 var (

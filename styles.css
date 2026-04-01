@@ -93,6 +93,8 @@ body { margin: 0; background: #eff5ff; }
   border-radius: 999px;
   color: #fff;
   padding: 4px 8px;
+  margin-top: auto;
+  margin-bottom: auto;
   font-size: .75rem;
   font-weight: 600;
   align-self: flex-start;

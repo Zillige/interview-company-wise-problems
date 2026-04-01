@@ -212,19 +212,28 @@ func slugify(name string) string {
 }
 
 func sanitizeFileName(name string) string {
-	name = strings.TrimSpace(name)
+	name = strings.TrimSpace(strings.ToLower(name))
 	if name == "" {
 		return "logo"
 	}
 
 	var builder strings.Builder
+	prevDash := false
 	for _, r := range name {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			builder.WriteRune('_')
-		default:
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			builder.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if !prevDash {
+			builder.WriteByte('-')
+			prevDash = true
 		}
 	}
-	return builder.String()
+
+	out := strings.Trim(builder.String(), "-")
+	if out == "" {
+		return "logo"
+	}
+	return out
 }
