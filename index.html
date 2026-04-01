@@ -1,408 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LeetCode Company Explorer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
-  <script defer src="https://unpkg.com/alpinejs@3.12.0/dist/cdn.min.js"></script>
-  <style>
-    :root {
-      color-scheme: light;
-      --app-bg: #eef2f7;
-      --surface: #ffffff;
-      --surface-alt: #f7f8fb;
-      --border: #e2e8f0;
-      --text: #111827;
-      --muted: #6b7280;
-      --accent: #2563eb;
-      --accent-soft: rgba(37, 99, 235, 0.1);
-      --shadow-lg: 0 20px 40px rgba(15, 23, 42, 0.1);
-      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interview Company-wise Problems</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/scripts/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  </head>
+  <body>
+    <main class="container" x-data="homePage()" x-init="load()">
+      <header class="header">
+        <h1>Top Asked Problems</h1>
+        <nav class="nav">
+          <a href="/">Home</a>
+          <a href="/companies">Companies</a>
+          <a href="/problems">Problems</a>
+        </nav>
+      </header>
 
-    * {
-      box-sizing: border-box;
-    }
+      <p class="subtitle">Most asked interview problems across all companies.</p>
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: var(--app-bg);
-      color: var(--text);
-      font-family: inherit;
-    }
+      <section class="cards" x-show="loading">
+        <template x-for="n in 9" :key="n">
+          <article class="card skeleton-card">
+            <div class="skeleton line w-70"></div>
+            <div class="skeleton line w-50"></div>
+            <div class="skeleton line w-60"></div>
+          </article>
+        </template>
+      </section>
 
-    .page {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 3rem 1.5rem 4rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
+      <section class="cards" x-show="!loading && !error">
+        <template x-for="problem in problems" :key="problem.id">
+          <article class="card">
+            <div class="card-header">
+              <a :href="problem.link" target="_blank" rel="noreferrer" x-text="problem.title"></a>
+              <span class="badge" :class="App.difficultyClass(problem.difficulty)" x-text="problem.difficulty"></span>
+            </div>
+            <div class="meta">
+              <span x-text="`Acceptance: ${App.formatPct(problem.acceptance_rate)}`"></span>
+              <span x-text="`Frequency: ${App.formatNum(problem.total_frequency)}`"></span>
+            </div>
+            <div class="logos">
+              <template x-for="company in problem.companies.slice(0, 10)" :key="`${problem.id}-${company.id}`">
+                <img class="logo" :src="company.logo" :alt="company.name" :title="company.name" loading="lazy" @error="$el.src='/logos/default.png'" />
+              </template>
+            </div>
+          </article>
+        </template>
+      </section>
 
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 1.75rem;
-      box-shadow: var(--shadow-lg);
-    }
+      <p class="panel-state error" x-show="error" x-text="error"></p>
+    </main>
 
-    .hero-card {
-      padding-bottom: 2rem;
-    }
-
-    .hero-card h1 {
-      margin: 0 0 0.5rem;
-      font-size: clamp(2rem, 3vw, 2.5rem);
-    }
-
-    .hero-card p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 1rem;
-      line-height: 1.6;
-    }
-
-    .eyebrow {
-      text-transform: uppercase;
-      letter-spacing: 0.3em;
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-bottom: 0.65rem;
-    }
-
-    .filter-card {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      align-items: flex-end;
-    }
-
-    .filter-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    label {
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-
-    select {
-      appearance: none;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0.75rem 1rem;
-      font-size: 1rem;
-      background: var(--surface-alt);
-      color: var(--text);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    select:focus-visible {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-    }
-
-    select:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .status-wrapper {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .status-message {
-      margin: 0;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-
-    .status-message.error {
-      color: #b91c1c;
-    }
-
-    .table-card {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .table-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .table-header h2 {
-      margin: 0;
-      font-size: 1.3rem;
-    }
-
-    .table-header p {
-      margin: 0.15rem 0 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
-    .subtle {
-      color: var(--muted);
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.35rem 0.9rem;
-      border-radius: 999px;
-      background: var(--surface-alt);
-      color: var(--text);
-      font-size: 0.8rem;
-      letter-spacing: 0.04em;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-    }
-
-    .table-wrapper {
-      overflow-x: auto;
-      border-top: 1px solid var(--border);
-      border-radius: 16px;
-      padding-top: 1rem;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 640px;
-    }
-
-    thead th {
-      text-align: left;
-      font-size: 0.85rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--muted);
-      padding: 0.65rem 0.5rem;
-    }
-
-    tbody tr {
-      transition: background 0.2s ease;
-    }
-
-    tbody tr:nth-child(even) {
-      background: var(--surface-alt);
-    }
-
-    tbody tr:hover {
-      background: rgba(37, 99, 235, 0.06);
-    }
-
-    td {
-      padding: 0.9rem 0.5rem;
-      border-top: 1px solid rgba(226, 232, 240, 0.8);
-      vertical-align: top;
-      font-size: 0.95rem;
-    }
-
-    .title-cell {
-      display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-    }
-
-    .company-label {
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .link-button {
-      color: var(--accent);
-      font-weight: 600;
-      text-decoration: none;
-      letter-spacing: 0.01em;
-    }
-
-    .link-button:hover {
-      text-decoration: underline;
-    }
-
-    .table-state {
-      padding: 1rem;
-      border-top: 1px solid var(--border);
-      color: var(--muted);
-      font-style: italic;
-      text-align: center;
-    }
-
-    @media (max-width: 768px) {
-      .panel {
-        padding: 1.25rem;
-      }
-
-      .table-wrapper {
-        padding-top: 0.5rem;
-      }
-
-      table {
-        min-width: 100%;
-      }
-    }
-  </style>
-</head>
-<body>
-  <main class="page" x-data="leetCodeDashboard()" x-init="init()">
-    <section class="panel hero-card">
-      <p class="eyebrow">LeetCode Explorer</p>
-      <h1>Browse company-specific problem insight</h1>
-      <p>Explore curated LeetCode problems organized by hiring companies. Filter by difficulty to find the right practice set and follow the direct links to solve.</p>
-    </section>
-
-    <section class="panel filter-card">
-      <div class="filter-group">
-        <label for="company">Company</label>
-        <select id="company" x-model="selectedCompany" @change="fetchProblems()" :disabled="loadingCompanies">
-          <option value="">All companies</option>
-          <template x-for="company in companies" :key="company">
-            <option :value="company" x-text="company"></option>
-          </template>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="difficulty">Difficulty</label>
-        <select id="difficulty" x-model="difficulty" @change="fetchProblems()">
-          <option>All</option>
-          <option>Easy</option>
-          <option>Medium</option>
-          <option>Hard</option>
-        </select>
-      </div>
-    </section>
-
-    <div class="status-wrapper">
-      <p class="status-message" x-show="loadingCompanies" aria-live="polite">Loading companies…</p>
-      <p class="status-message error" x-show="error" role="alert" x-text="error"></p>
-    </div>
-
-    <section class="panel table-card">
-      <div class="table-header">
-        <div>
-          <h2 x-text="selectedCompany ? `${selectedCompany} problems` : 'All company problems'"></h2>
-          <p class="subtle" x-text="loadingProblems ? 'Refreshing results…' : `${problems.length} problem(s)`"></p>
-        </div>
-        <span class="badge" x-text="difficulty === 'All' ? 'All difficulties' : difficulty"></span>
-      </div>
-
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Difficulty</th>
-              <th>Frequency</th>
-              <th>Acceptance</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template x-for="problem in problems" :key="problem.company + problem.title">
-              <tr>
-                <td>
-                  <div class="title-cell">
-                    <span x-text="problem.title"></span>
-                    <span class="company-label" x-text="problem.company"></span>
-                  </div>
-                </td>
-                <td x-text="problem.difficulty"></td>
-                <td x-text="problem.frequency"></td>
-                <td x-text="problem.acceptanceRate"></td>
-                <td>
-                  <a class="link-button" :href="problem.link" target="_blank" rel="noreferrer">Open</a>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-        <div class="table-state" x-show="loadingProblems">Loading problems…</div>
-        <div class="table-state" x-show="!loadingProblems && problems.length === 0">No problems match the current filters.</div>
-      </div>
-    </section>
-  </main>
-
-  <script>
-    function leetCodeDashboard() {
-      return {
-        companies: [],
-        selectedCompany: '',
-        difficulty: 'All',
-        problems: [],
-        loadingCompanies: true,
-        loadingProblems: false,
-        error: '',
-        async init() {
-          await this.loadCompanies();
-          this.fetchProblems();
-        },
-        async loadCompanies() {
-          this.loadingCompanies = true;
-          this.error = '';
-          try {
-            const res = await fetch('/api/companies');
-            if (!res.ok) {
-              throw new Error('Unable to load companies');
+    <script>
+      function homePage() {
+        return {
+          App: window.App,
+          loading: true,
+          error: '',
+          problems: [],
+          async load() {
+            this.loading = true;
+            this.error = '';
+            try {
+              const res = await this.App.fetchJson('/api/top?limit=25');
+              this.problems = res.items || [];
+            } catch (e) {
+              this.error = e.message || 'Failed to load top problems';
+            } finally {
+              this.loading = false;
             }
-            this.companies = await res.json();
-            if (!this.selectedCompany && this.companies.length) {
-              this.selectedCompany = this.companies[0];
-            }
-          } catch (err) {
-            this.error = err.message;
-          } finally {
-            this.loadingCompanies = false;
-          }
-        },
-        async fetchProblems() {
-          this.loadingProblems = true;
-          this.error = '';
-          this.problems = [];
-          try {
-            const params = new URLSearchParams();
-            if (this.selectedCompany) {
-              params.set('company', this.selectedCompany);
-            }
-            if (this.difficulty && this.difficulty !== 'All') {
-              params.set('difficulty', this.difficulty);
-            }
-            const queryString = params.toString();
-            const url = `/api/problems${queryString ? `?${queryString}` : ''}`;
-            const res = await fetch(url);
-            if (!res.ok) {
-              const message = await res.text();
-              throw new Error(message || 'Unable to load problems');
-            }
-            this.problems = await res.json();
-          } catch (err) {
-            this.error = err.message;
-          } finally {
-            this.loadingProblems = false;
           }
         }
-      };
-    }
-  </script>
-</body>
+      }
+    </script>
+  </body>
 </html>
